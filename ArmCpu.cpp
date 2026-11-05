@@ -345,8 +345,28 @@ bool ArmCpu::wakeRedistributor (bool local)
 
 bool ArmCpu::prepareGic (void)
 {
-  if (!mapGic () || !initDistributor () || !wakeRedistributor (true)) { return false; }
+  // Silent failures here look exactly like "the driver never matched", so each step reports itself.
+  if (!mapGic ()) {
+    kprintf ("ArmCpu: mapGic failed (dist=%p redist=%p size=%llu)\n", (void *) dist,
+        (void *) redistBase, (unsigned long long) redistSize);
+    return false;
+  }
+  if (!initDistributor ()) {
+    kprintf ("ArmCpu: initDistributor failed\n");
+    return false;
+  }
+  if (!wakeRedistributor (true)) {
+    kprintf ("ArmCpu: wakeRedistributor failed (redist=%p typer probe %08x/%08x)\n",
+        (void *) redist, armcpu_gic_typer_probe[0], armcpu_gic_typer_probe[1]);
+    return false;
+  }
   gGicShared = 1;
+  if (redist != 0) {
+    uintptr_t sgi = redist + 0x10000;
+    kprintf ("ArmCpu: gic ready dist=%p redist=%p igroupr0=%08x isenabler0=%08x\n",
+        (void *) dist, (void *) redist, *reinterpret_cast<volatile uint32_t *> (sgi + 0x80),
+        *reinterpret_cast<volatile uint32_t *> (sgi + 0x100));
+  }
   return true;
 }
 
